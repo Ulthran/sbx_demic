@@ -19,6 +19,7 @@ jobs:
         uses: sunbeam-labs/sbx_test_action@v0
         with:
           sunbeam-version: 'dev'
+          install-options: '-m'
           extension-name: 'Ulthran/sbx_demic'
           extension-branch-name: ${{ github.head_ref }}
           other-extensions: 'sunbeam-labs/sbx_coassembly'
