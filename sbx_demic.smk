@@ -19,7 +19,7 @@ except NameError:
     LOG_FP = output_subdir(Cfg, "logs")
 
 
-def get_demic_path() -> str:
+def get_demic_path() -> Path:
     demic_path = Path(sunbeam_dir) / "extensions" / "sbx_demic"
     if demic_path.exists():
         return demic_path
@@ -48,6 +48,23 @@ rule decontam_list:
         "find {params.decontam_fp} -iname '*.fastq.gz' > {output}"
 
 
+rule maxbin_download:
+    """Supposedly bioconda-recipes has updated the maxbin recipe to not point
+    at the JBEI source (which is down) but no version of conda/bioconda I've 
+    tried works
+    https://github.com/bioconda/bioconda-recipes/pull/25064
+    """
+    output:
+        get_demic_path() / "MaxBin-2.2.7/run_MaxBin.pl"
+    params:
+        target_dir=get_demic_path()
+    shell:
+        """
+        wget -qO- https://zenodo.org/record/4247277/files/MaxBin-2.2.7.tar.gz \
+        | tar xvz -C {params.target_dir}
+        """
+
+
 rule maxbin:
     input:
         a=expand(
@@ -62,6 +79,7 @@ rule maxbin:
         ),
         b=rules.all_coassemble.input.b,
         decontam_list=DEMIC_FP / "decontam_list.txt",
+        script=get_demic_path() / "MaxBin-2.2.7/run_MaxBin.pl"
     output:
         DEMIC_FP / "maxbin" / "all_final_contigs.fa",
     benchmark:
