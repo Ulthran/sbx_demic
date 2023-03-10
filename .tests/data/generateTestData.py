@@ -9,6 +9,7 @@ import gzip
 import sys
 import os
 
+
 # Generate n sets of test data
 # @param genome is the path to the txt file containing only sequences (our test genome)
 #        To manually prepare this file, just make a copy of your fasta and remove the

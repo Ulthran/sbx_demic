@@ -16,6 +16,10 @@ try:
     LOG_FP
 except NameError:
     LOG_FP = output_subdir(Cfg, "logs")
+try:
+    COASSEMBLY_FP
+except NameError:
+    COASSEMBLY_FP = ASSEMBLY_FP / "coassembly"
 
 
 def get_demic_path() -> str:
@@ -31,13 +35,18 @@ rule all_demic:
     input:
         TARGET_DEMIC,
 
+
 rule decontam_list:
     input:
-        expand(QC_FP / "decontam" / "{sample}_{rp}.fastq.gz", sample=Samples.keys(), rp=Pairs)
+        expand(
+            QC_FP / "decontam" / "{sample}_{rp}.fastq.gz",
+            sample=Samples.keys(),
+            rp=Pairs,
+        ),
     output:
-        DEMIC_FP / "decontam_list.txt"
+        DEMIC_FP / "decontam_list.txt",
     params:
-        decontam_fp=QC_FP / "decontam"
+        decontam_fp=QC_FP / "decontam",
     shell:
         "find {params.decontam_fp} -iname '*.fastq.gz' > {output}"
 
@@ -55,7 +64,7 @@ rule maxbin:
             ),
         ),
         b=rules.all_coassemble.input.b,
-        decontam_list=DEMIC_FP / "decontam_list.txt"
+        decontam_list=DEMIC_FP / "decontam_list.txt",
     output:
         DEMIC_FP / "maxbin" / "all_final_contigs.fa",
     benchmark:
@@ -79,7 +88,17 @@ rule bowtie2_build:
     input:
         DEMIC_FP / "maxbin" / "all_final_contigs.fa",
     output:
-        [DEMIC_FP / "bowtie" / ("contigs" + ext) for ext in [".1.bt2", ".2.bt2", ".3.bt2", ".4.bt2", ".rev.1.bt2", ".rev.2.bt2"]],
+        [
+            DEMIC_FP / "bowtie" / ("contigs" + ext)
+            for ext in [
+                ".1.bt2",
+                ".2.bt2",
+                ".3.bt2",
+                ".4.bt2",
+                ".rev.1.bt2",
+                ".rev.2.bt2",
+            ]
+        ],
     benchmark:
         BENCHMARK_FP / "bowtie2_build.tsv"
     log:
