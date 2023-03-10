@@ -44,14 +44,6 @@ def run_sunbeam(setup):
 
     output_fp = os.path.join(project_dir, "sunbeam_output")
 
-    ver = sp.check_output(
-        [
-            "conda", "--version"
-        ]
-    )
-
-    assert ver == "23.1.0"
-
     try:
         # Run the test job
         sp.check_output(

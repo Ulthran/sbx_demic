@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 
+COASSEMBLY_FP = ASSEMBLY_FP / "coassembly"
 DEMIC_FP = Path(Cfg["all"]["output_fp"]) / "demic"
 TARGET_DEMIC = [str(MAPPING_FP / "demic" / "DEMIC_OUT" / "all_PTR.txt")]
 
@@ -16,10 +17,6 @@ try:
     LOG_FP
 except NameError:
     LOG_FP = output_subdir(Cfg, "logs")
-try:
-    COASSEMBLY_FP
-except NameError:
-    COASSEMBLY_FP = ASSEMBLY_FP / "coassembly"
 
 
 def get_demic_path() -> str:
