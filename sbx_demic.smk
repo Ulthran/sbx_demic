@@ -1,12 +1,11 @@
 # -*- mode: Snakemake -*-
 
-from sunbeamlib import samtools
 import os
 import sys
+from pathlib import Path
 
+DEMIC_FP = Path(Cfg["all"]["output_fp"]) / "demic"
 TARGET_DEMIC = [str(MAPPING_FP / "demic" / "DEMIC_OUT" / "all_PTR.txt")]
-BINNED_DIR = str(ASSEMBLY_FP / "coassembly" / "max_bin")
-CONTIGS_FASTA = BINNED_DIR + "/all_final_contigs.fa"
 
 
 try:
@@ -20,8 +19,8 @@ except NameError:
 
 
 def get_demic_path() -> str:
-    demic_path = os.path.join(sunbeam_dir, "extensions/sbx_demic/")
-    if os.path.exists(demic_path):
+    demic_path = Path(sunbeam_dir) / "extensions" / "sbx_demic"
+    if demic_path.exists():
         return demic_path
     raise Error(
         "Filepath for demic not found, are you sure it's installed under extensions/sbx_demic?"
@@ -32,11 +31,21 @@ rule all_demic:
     input:
         TARGET_DEMIC,
 
+rule decontam_list:
+    input:
+        expand(QC_FP / "decontam" / "{sample}_{rp}.fastq.gz", sample=Samples.keys(), rp=Pairs)
+    output:
+        DEMIC_FP / "decontam_list.txt"
+    params:
+        decontam_fp=QC_FP / "decontam"
+    shell:
+        "find {params.decontam_fp} -iname '*.fastq.gz' > {output}"
+
 
 rule maxbin:
     input:
         a=expand(
-            str(ASSEMBLY_FP / "coassembly" / "{group}_final_contigs.fa"),
+            COASSEMBLY_FP / "{group}_final_contigs.fa",
             group=list(
                 set(
                     coassembly_groups(
@@ -45,42 +54,41 @@ rule maxbin:
                 )
             ),
         ),
-        b=rules.all_prep_paired.input,
+        b=rules.all_coassemble.input.b,
+        decontam_list=DEMIC_FP / "decontam_list.txt"
     output:
-        str(Cfg["all"]["output_fp"]) + CONTIGS_FASTA,
+        DEMIC_FP / "maxbin" / "all_final_contigs.fa",
     benchmark:
         BENCHMARK_FP / "maxbin.tsv"
     log:
         LOG_FP / "maxbin.log",
     params:
-        basename=str(Cfg["all"]["output_fp"]),
-        binned_dir=str(Cfg["all"]["output_fp"]) + BINNED_DIR,
-        contigs_fasta=str(Cfg["all"]["output_fp"]) + CONTIGS_FASTA,
+        contigs_fasta=str(COASSEMBLY_FP / "all_final_contigs.fa"),
+        out_dir=str(DEMIC_FP / "maxbin"),
     conda:
-        "demic_env.yml"
+        "demic_bio_env.yml"
     shell:
         """
-        find {params.basename}/qc/decontam -iname '*.fastq.gz' > {params.basename}/decontam_list && \
-        mkdir -p {params.binned_dir} && \
-        cp {params.basename}/assembly/coassembly/all_final_contigs.fa {output} && \
-        run_MaxBin.pl -thread 10 -contig {params.contigs_fasta} -out {params.binned_dir} -reads_list {params.basename}/decontam_list -verbose 2>&1 | tee {log}
+        run_MaxBin.pl -thread 10 -contig {params.contigs_fasta} \
+        -out {params.out_dir} -reads {input.decontam_list} \
+        -verbose 2>&1 | tee {log}
         """
 
 
 rule bowtie2_build:
     input:
-        str(Cfg["all"]["output_fp"]) + CONTIGS_FASTA,
+        DEMIC_FP / "maxbin" / "all_final_contigs.fa",
     output:
-        touch(str(Cfg["all"]["output_fp"]) + CONTIGS_FASTA + ".1.bt2"),
+        [DEMIC_FP / "bowtie" / ("contigs" + ext) for ext in [".1.bt2", ".2.bt2", ".3.bt2", ".4.bt2", ".rev.1.bt2", ".rev.2.bt2"]],
     benchmark:
         BENCHMARK_FP / "bowtie2_build.tsv"
     log:
         LOG_FP / "bowtie2-build.log",
     params:
-        basename=str(Cfg["all"]["output_fp"]) + CONTIGS_FASTA,
+        basename=str(DEMIC_FP / "bowtie2" / "contigs"),
     threads: 4
     conda:
-        "demic_env.yml"
+        "demic_bio_env.yml"
     shell:
         "bowtie2-build --threads {threads} {input} {params.basename} 2>&1 | tee {log}"
 
@@ -89,26 +97,29 @@ rule bowtie2_build:
 rule bowtie2:
     input:
         rules.bowtie2_build.output,
-        reads=expand(
-            str(QC_FP / "decontam" / "{sample}_{rp}.fastq.gz"),
+        rp1=expand(
+            str(QC_FP / "decontam" / "{sample}_1.fastq.gz"),
             sample=Samples.keys(),
-            rp=Pairs,
+        ),
+        rp2=expand(
+            str(QC_FP / "decontam" / "{sample}_2.fastq.gz"),
+            sample=Samples.keys(),
         ),
     output:
-        str(MAPPING_FP / "demic" / "raw" / "{sample}.sam"),
+        temp(MAPPING_FP / "demic" / "raw" / "{sample}.sam"),
     benchmark:
         BENCHMARK_FP / "bowtie2_{sample}.tsv"
     log:
         LOG_FP / "bowtie2_{sample}.log",
     params:
-        db_basename=str(Cfg["all"]["output_fp"]) + CONTIGS_FASTA,
+        basename=str(DEMIC_FP / "bowtie2" / "contigs"),
     threads: 4
     conda:
-        "demic_env.yml"
+        "demic_bio_env.yml"
     shell:
         """
-        bowtie2 -q -x {params.db_basename} \
-        -1 {input.reads[0]} -2 {input.reads[1]} -p {threads} \
+        bowtie2 -q -x {params.basename} \
+        -1 {input.rp1} -2 {input.rp2} -p {threads} \
         -S {output} \
         2>&1 | tee {log}
         """
@@ -126,12 +137,12 @@ rule samtools_sort:
         BENCHMARK_FP / "samtools_sort_{sample}.tsv"
     threads: 4
     conda:
-        "demic_env.yml"
+        "demic_bio_env.yml"
     shell:
         """
-        echo "converting to bam, sorting, and converting back to sam"
-        samtools view -@ {threads} -bS {input} | samtools sort -@ {threads} - -o {output.temp_files} 2> {log}
-        samtools view -@ {threads} -h {output.temp_files} > {output.sorted_files} 2>> {log}
+        samtools view -@ {threads} -bS {input} | \
+        samtools sort -@ {threads} - -o {output.temp_files} 2>&1 | tee {log}
+        samtools view -@ {threads} -h {output.temp_files} > {output.sorted_files} 2>> | tee {log}
         """
 
 
@@ -148,10 +159,10 @@ rule run_demic:
     log:
         LOG_FP / "run_demic.log",
     params:
-        r_installer=get_demic_path() + "/envs/install.R",
-        demic=get_demic_path() + "/vendor_demic_v1.0.2/DEMIC.pl",
+        r_installer=get_demic_path() / "envs" / "install.R",
+        demic=get_demic_path() / "vendor_demic_v1.0.2" / "DEMIC.pl",
         sam_dir=str(MAPPING_FP / "demic" / "sorted"),
-        fasta_dir=str(Cfg["all"]["output_fp"]) + BINNED_DIR,
+        fasta_dir=str(DEMIC_FP / "maxbin"),
         keep_all=Cfg["sbx_demic"]["keepall"],
         extras=Cfg["sbx_demic"]["extras"],
     threads: 4
