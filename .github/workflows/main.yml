@@ -22,7 +22,6 @@ jobs:
           install-options: '-m'
           extension-name: 'Ulthran/sbx_demic'
           extension-branch-name: ${{ github.head_ref }}
-          other-extensions: 'sunbeam-labs/sbx_coassembly'
 
       - name: Dump Logs
         shell: bash

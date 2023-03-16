@@ -1,3 +1,6 @@
+coassembly_demic:
+  threads: 4
+  group_file: ''
 sbx_demic:
   threads: 4 #--thread_num
   keepall: FALSE #--output_all
