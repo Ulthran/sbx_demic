@@ -76,9 +76,9 @@ rule all_coassemble_demic:
             sample=coassembly_groups(
                 Cfg["coassembly_demic"]["group_file"], Samples.keys()
             )[1],
-            rp=coassembly_groups(Cfg["coassembly_demic"]["group_file"], Samples.keys())[
-                2
-            ],
+            rp=coassembly_groups(
+                Cfg["coassembly_demic"]["group_file"], Samples.keys()
+            )[2],
         ),
 
 
@@ -92,7 +92,7 @@ rule prep_samples_for_concatenation_paired_demic:
     benchmark:
         BENCHMARK_FP / "prep_samples_for_concatenation_paired_{sample}_{group}.tsv"
     log:
-        LOG_FP / "prep_samples_for_concatenation_paired_{sample}_{group}.log",
+        LOG_FP / "prep_samples_for_concatenation_paired_demic_{sample}_{group}.log",
     threads: Cfg["coassembly_demic"]["threads"]
     conda:
         "sbx_coassembly_env.yml"
@@ -131,7 +131,7 @@ rule coassemble_paired_demic:
     benchmark:
         BENCHMARK_FP / "coassemble_paired_{group}.tsv"
     log:
-        LOG_FP / "coassemble_paired_{group}.log",
+        LOG_FP / "coassemble_paired_demic_{group}.log",
     params:
         assembly_dir=str(COASSEMBLY_DEMIC_FP / "{group}"),
     threads: Cfg["coassembly_demic"]["threads"]
@@ -159,47 +159,6 @@ rule decontam_list:
         "find {params.decontam_fp} -iname '*.fastq.gz' > {output}"
 
 
-rule maxbin_download:
-    """Supposedly bioconda-recipes has updated the maxbin recipe to not point
-    at the JBEI source (which is down) but no version of conda/bioconda I've 
-    tried works
-    https://github.com/bioconda/bioconda-recipes/pull/25064
-    """
-    output:
-        get_demic_path() / ".maxbin.installed"
-    params:
-        target_dir=get_demic_path()
-    conda:
-        "demic_bio_env.yml"
-    shell:
-        """
-        ENV_DIR=$(dirname $(dirname $(which bowtie2)))
-        wget -qO- https://anaconda.org/bioconda/maxbin2/2.2.7/download/linux-64/maxbin2-2.2.7-h87f3376_4.tar.bz2 \
-        | tar xj -C $ENV_DIR
-        touch {output}
-        """
-
-
-rule maxbin_setup:
-    """Because everything sucks, the tarball for MaxBin has absolute paths to 
-    the owner's computer
-    """
-    input:
-        get_demic_path() / "MaxBin-2.2.7" / "setting"
-    output:
-        get_demic_path() / "MaxBin-2.2.7" / ".fixed"
-    conda:
-        "demic_bio_env.yml"
-    shell:
-        """
-        rm {input}
-        echo "[FragGeneScan] $(which FragGeneScan)" >> {input}
-        echo "[Bowtie2] $(which bowtie2)" >> {input}
-        echo "[HMMER3] $(which hmmscan)" >> {input}
-        touch {output}
-        """
-
-
 rule maxbin:
     input:
         a=expand(
@@ -212,7 +171,7 @@ rule maxbin:
                 )
             ),
         ),
-        b=rules.all_coassemble.input.b,
+        b=rules.all_coassemble_demic.input.b,
         decontam_list=DEMIC_FP / "decontam_list.txt",
     output:
         DEMIC_FP / "maxbin" / "all_final_contigs.fa",
@@ -221,14 +180,16 @@ rule maxbin:
     log:
         LOG_FP / "maxbin.log",
     params:
+        maxbin_dir=str(get_demic_path() / "MaxBin_2.2.7_scripts"),
+        script=str(get_demic_path() / "MaxBin_2.2.7_scripts" / "run_MaxBin.pl"),
         contigs_fasta=str(COASSEMBLY_DEMIC_FP / "all_final_contigs.fa"),
         out_dir=str(DEMIC_FP / "maxbin"),
     conda:
-        "demic_bio_env.yml"
+        "sbx_demic_bio_env.yml"
     shell:
         """
-        conda install -c bioconda perl-lwp-simple
-        run_MaxBin.pl -thread 10 -contig {params.contigs_fasta} \
+        cd {params.maxbin_dir}
+        {params.script} -thread 10 -contig {input.a} \
         -out {params.out_dir} -reads {input.decontam_list} \
         -verbose 2>&1 | tee {log}
         """
@@ -257,7 +218,7 @@ rule bowtie2_build:
         basename=str(DEMIC_FP / "bowtie2" / "contigs"),
     threads: 4
     conda:
-        "demic_bio_env.yml"
+        "sbx_demic_bio_env.yml"
     shell:
         "bowtie2-build --threads {threads} {input} {params.basename} 2>&1 | tee {log}"
 
@@ -284,7 +245,7 @@ rule bowtie2:
         basename=str(DEMIC_FP / "bowtie2" / "contigs"),
     threads: 4
     conda:
-        "demic_bio_env.yml"
+        "sbx_demic_bio_env.yml"
     shell:
         """
         bowtie2 -q -x {params.basename} \
@@ -306,7 +267,7 @@ rule samtools_sort:
         BENCHMARK_FP / "samtools_sort_{sample}.tsv"
     threads: 4
     conda:
-        "demic_bio_env.yml"
+        "sbx_demic_bio_env.yml"
     shell:
         """
         samtools view -@ {threads} -bS {input} | \
@@ -336,7 +297,7 @@ rule run_demic:
         extras=Cfg["sbx_demic"]["extras"],
     threads: 4
     conda:
-        "demic_env.yml"
+        "sbx_demic_env.yml"
     shell:
         """
         {params.demic} --output_all {params.keep_all} {params.extras} \

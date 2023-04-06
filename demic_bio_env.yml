@@ -1,7 +1,0 @@
-name: sbx_demic_bio_env
-channels:
-  - bioconda
-  - conda-forge
-dependencies:
-  - maxbin2
-  - samtools
