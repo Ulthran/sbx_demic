@@ -1460,6 +1460,7 @@ sub checkProgram
 sub checkFastq
 {
 	my $input_f = $_[0];
+	print "FILE: $input_f\n";
 	my $fastq_line;
 	my $fastq = "";
 	if ($input_f =~ /q.gz$/)
@@ -1482,6 +1483,7 @@ sub checkFastq
 	while(defined($fastq_line = <CHECK>))
 	{
 		chomp($fastq_line);
+		print "LINE: $fastq_line\n";
 		if ($fastq_line =~ /^>/)
 		{
 			$fastq = "fa";
