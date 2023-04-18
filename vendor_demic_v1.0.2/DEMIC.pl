@@ -630,11 +630,14 @@ Arguments:
 				my $exit_code2 = ($status2 >> 8) & 0xff;
 				if ($exit_code2 != 0) {
 					push @failed_files, $cov3s;
+					push @failed_files, "Failed with exit code $exit_code2";
 				} elsif (!-e $output_R) {
 					push @failed_files, $cov3s;
+					push @failed_files, "No output from R script";
 				} 
 			} else {
 				push @failed_files, $cov3s;
+				push @failed_files, "Test line number and valid line number are not equal";
 			}
 		}
 		if (@failed_files > 0) {

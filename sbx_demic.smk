@@ -275,6 +275,15 @@ rule samtools_sort:
         """
 
 
+rule install_demic:
+    output:
+        out=DEMIC_FP / ".installed"
+    conda:
+        "sbx_demic_env.yml"
+    script:
+        "scripts/install_demic.R"
+
+
 rule run_demic:
     input:
         expand(
@@ -282,6 +291,7 @@ rule run_demic:
             sample=Samples.keys(),
             cluster=["001", "002"]
         ),
+        DEMIC_FP / ".installed"
     output:
         str(MAPPING_FP / "demic" / "DEMIC_OUT" / "{group}" / "all_PTR.txt"),
     benchmark:
