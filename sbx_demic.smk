@@ -105,7 +105,7 @@ rule prep_samples_for_concatenation_paired_demic:
 
 rule combine_groups_paired_demic:
     input:
-        rules.all_coassemble.input.b,
+        rules.all_coassemble_demic.input.b,
     output:
         r1=str(COASSEMBLY_DEMIC_FP / "fastq" / "{group}_1.fastq.gz"),
         r2=str(COASSEMBLY_DEMIC_FP / "fastq" / "{group}_2.fastq.gz"),
@@ -165,17 +165,17 @@ rule decontam_list:
         "scripts/decontam_list.py"
 
 
-rule maxbin:
+checkpoint maxbin:
     input:
         a=COASSEMBLY_DEMIC_FP / "{group}_final_contigs.fa",
         b=rules.all_coassemble_demic.input.b,
         decontam_list=DEMIC_FP / "decontam_list_{group}.txt",
     output:
-        DEMIC_FP / "maxbin" / "{group}.{cluster}.fasta",
+        directory(DEMIC_FP / "maxbin" / "{group}")
     benchmark:
-        BENCHMARK_FP / "maxbin_{group}_{cluster}.tsv"
+        BENCHMARK_FP / "maxbin_{group}.tsv"
     log:
-        LOG_FP / "maxbin_{group}_{cluster}.log",
+        LOG_FP / "maxbin_{group}.log",
     params:
         maxbin_dir=str(get_demic_path() / "MaxBin_2.2.7_scripts"),
         script=str(get_demic_path() / "MaxBin_2.2.7_scripts" / "run_MaxBin.pl"),
@@ -184,6 +184,7 @@ rule maxbin:
         "sbx_demic_bio_env.yml"
     shell:
         """
+        mkdir(output)
         cd {params.maxbin_dir}
         {params.script} -thread 10 -contig {input.a} \
         -out {params.out_dir} -reads_list {input.decontam_list} \
@@ -284,13 +285,26 @@ rule install_demic:
         "scripts/install_demic.R"
 
 
+def samples_for_group(group: str) -> list:
+    cg = coassembly_groups(Cfg["coassembly_demic"]["group_file"], Samples.keys())
+    return [s for g, s in zip(cg[0], cg[1]) if g == group]
+
+def clusters_for_group(group: str) -> list:
+    fns = os.listdir(DEMIC_FP / "maxbin")
+    return [s.split(".")[1] for s in fns if len(s.split(".")) > 2 and s.split(".")[0] == group and s.split(".")[2] == "fasta"]
+
+def demic_input_for_group(wildcards) -> list:
+    checkpoint_output = checkpoints.maxbin.get(**wildcards).output[0]
+    return [
+        MAPPING_FP / "demic" / "sorted" / f"{wildcards.group}" / f"{sample}_{cluster}.sam"
+        for sample in samples_for_group(wildcards.group)
+        for cluster in clusters_for_group(wildcards.group)
+    ]
+
+
 rule run_demic:
     input:
-        expand(
-            MAPPING_FP / "demic" / "sorted" / "{{group}}" / "{sample}_{cluster}.sam",
-            sample=Samples.keys(),
-            cluster=["001", "002"]
-        ),
+        demic_input_for_group,
         DEMIC_FP / ".installed"
     output:
         str(MAPPING_FP / "demic" / "DEMIC_OUT" / "{group}" / "all_PTR.txt"),
