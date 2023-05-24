@@ -115,6 +115,8 @@ rule combine_groups_paired_demic:
     threads: Cfg["coassembly_demic"]["threads"]
     conda:
         "sbx_coassembly_env.yml"
+    resources:
+        runtime=120,
     shell:
         """
         cat {params.w1} | pigz -p {threads} > {output.r1}
@@ -137,6 +139,9 @@ rule coassemble_paired_demic:
     threads: Cfg["coassembly_demic"]["threads"]
     conda:
         "sbx_coassembly_env.yml"
+    resources:
+        mem_mb=20000,
+        runtime=720,
     shell:
         """
         megahit -1 {input.r1} -2 {input.r2} -t {threads} -o {params.assembly_dir} 2>&1 | tee {log}
@@ -171,7 +176,7 @@ checkpoint maxbin:
         b=rules.all_coassemble_demic.input.b,
         decontam_list=DEMIC_FP / "decontam_list_{group}.txt",
     output:
-        directory(DEMIC_FP / "maxbin" / "{group}")
+        directory(DEMIC_FP / "maxbin" / "{group}/")
     benchmark:
         BENCHMARK_FP / "maxbin_{group}.tsv"
     log:
@@ -182,9 +187,12 @@ checkpoint maxbin:
         out_dir=str(DEMIC_FP / "maxbin" / "{group}"),
     conda:
         "sbx_demic_bio_env.yml"
+    resources:
+        mem_mb=20000,
+        runtime=720,
     shell:
         """
-        mkdir(output)
+        mkdir {output}
         cd {params.maxbin_dir}
         {params.script} -thread 10 -contig {input.a} \
         -out {params.out_dir} -reads_list {input.decontam_list} \
@@ -216,6 +224,9 @@ rule bowtie2_build:
     threads: 4
     conda:
         "sbx_demic_bio_env.yml"
+    resources:
+        mem_mb=8000,
+        runtime=240,
     shell:
         """
         mkdir -p {params.basename}
@@ -246,6 +257,9 @@ rule bowtie2:
     threads: 4
     conda:
         "sbx_demic_bio_env.yml"
+    resources:
+        mem_mb=8000,
+        runtime=240,
     shell:
         """
         bowtie2 -q -x {params.basename} \
@@ -322,6 +336,9 @@ rule run_demic:
     threads: 4
     conda:
         "sbx_demic_env.yml"
+    resources:
+        mem_mb=20000,
+        runtime=720,
     shell:
         """
         {params.demic} --output_all {params.keep_all} {params.extras} \
