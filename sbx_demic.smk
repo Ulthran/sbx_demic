@@ -194,9 +194,19 @@ checkpoint maxbin:
         """
         mkdir {output}
         cd {params.maxbin_dir}
-        {params.script} -thread 10 -contig {input.a} \
-        -out {params.out_dir} -reads_list {input.decontam_list} \
-        -verbose 2>&1 | tee {log}
+        
+        if command -v MaxBin &> /dev/null
+        then
+            {params.script} -thread 10 -contig {input.a} \
+            -out {params.out_dir} -reads_list {input.decontam_list} \
+            -verbose 2>&1 | tee {log}
+        elif command -v run_MaxBin.pl &> /dev/null
+        then
+            run_MaxBin.pl -thread 10 -contig {input.a} \
+            -out {params.out_dir} -reads_list {input.decontam_list} \
+            -verbose 2>&1 | tee {log}
+        else
+            echo "Could not find MaxBin or run_MaxBin.pl in $PATH"
         """
 
 
