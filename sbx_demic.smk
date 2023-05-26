@@ -207,6 +207,7 @@ checkpoint maxbin:
             -verbose 2>&1 | tee {log}
         else
             echo "Could not find MaxBin or run_MaxBin.pl in $PATH"
+        fi
         """
 
 
