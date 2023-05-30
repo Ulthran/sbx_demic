@@ -293,6 +293,9 @@ rule samtools_sort:
     threads: 4
     conda:
         "sbx_demic_bio_env.yml"
+    resources:
+        mem_mb=8000,
+        runtime=240,
     shell:
         """
         samtools view -@ {threads} -bS {input} | \
