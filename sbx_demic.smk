@@ -170,7 +170,7 @@ rule decontam_list:
         "scripts/decontam_list.py"
 
 
-checkpoint maxbin:
+rule maxbin:
     input:
         a=COASSEMBLY_DEMIC_FP / "{group}_final_contigs.fa",
         b=rules.all_coassemble_demic.input.b,
@@ -213,10 +213,10 @@ checkpoint maxbin:
 
 rule bowtie2_build:
     input:
-        DEMIC_FP / "maxbin" / "{group}.{cluster}.fasta",
+        COASSEMBLY_DEMIC_FP / "{group}_final_contigs.fa",
     output:
         [
-            DEMIC_FP / "bowtie2" / "{group}" / "{cluster}" / ("contigs" + ext)
+            DEMIC_FP / "bowtie2" / "{group}" / ("contigs" + ext)
             for ext in [
                 ".1.bt2",
                 ".2.bt2",
@@ -227,11 +227,11 @@ rule bowtie2_build:
             ]
         ],
     benchmark:
-        BENCHMARK_FP / "bowtie2_build_{group}_{cluster}.tsv"
+        BENCHMARK_FP / "bowtie2_build_{group}.tsv"
     log:
-        LOG_FP / "bowtie2-build_{group}_{cluster}.log",
+        LOG_FP / "bowtie2-build_{group}.log",
     params:
-        basename=str(DEMIC_FP / "bowtie2" / "{group}" / "{cluster}" / "contigs"),
+        basename=str(DEMIC_FP / "bowtie2" / "{group}" / "contigs"),
     threads: 4
     conda:
         "sbx_demic_bio_env.yml"
@@ -248,7 +248,7 @@ rule bowtie2_build:
 # Run bowtie2 with index
 rule bowtie2:
     input:
-        DEMIC_FP / "bowtie2" / "{group}" / "{cluster}" / "contigs.1.bt2",
+        DEMIC_FP / "bowtie2" / "{group}" / "contigs.1.bt2",
         rp1=expand(
             str(QC_FP / "decontam" / "{sample}_1.fastq.gz"),
             sample=Samples.keys(),
@@ -258,13 +258,13 @@ rule bowtie2:
             sample=Samples.keys(),
         ),
     output:
-        temp(MAPPING_FP / "demic" / "raw" / "{group}" / "{sample}_{cluster}.sam"),
+        temp(MAPPING_FP / "demic" / "raw" / "{group}" / "{sample}.sam"),
     benchmark:
-        BENCHMARK_FP / "bowtie2_{sample}_{group}_{cluster}.tsv"
+        BENCHMARK_FP / "bowtie2_{sample}_{group}.tsv"
     log:
-        LOG_FP / "bowtie2_{sample}_{group}_{cluster}.log",
+        LOG_FP / "bowtie2_{sample}_{group}.log",
     params:
-        basename=str(DEMIC_FP / "bowtie2" / "{group}" / "{cluster}" / "contigs"),
+        basename=str(DEMIC_FP / "bowtie2" / "{group}" / "contigs"),
     threads: 4
     conda:
         "sbx_demic_bio_env.yml"
@@ -282,14 +282,14 @@ rule bowtie2:
 
 rule samtools_sort:
     input:
-        str(MAPPING_FP / "demic" / "raw" / "{group}" / "{sample}_{cluster}.sam"),
+        str(MAPPING_FP / "demic" / "raw" / "{group}" / "{sample}.sam"),
     output:
-        temp_files=temp(str(MAPPING_FP / "demic" / "sorted" / "{group}" / "{sample}_{cluster}.bam")),
-        sorted_files=str(MAPPING_FP / "demic" / "sorted" / "{group}" / "{sample}_{cluster}.sam"),
+        temp_files=temp(str(MAPPING_FP / "demic" / "sorted" / "{group}" / "{sample}.bam")),
+        sorted_files=str(MAPPING_FP / "demic" / "sorted" / "{group}" / "{sample}.sam"),
     log:
-        str(MAPPING_FP / "demic" / "logs" / "samtools_{sample}_{group}_{cluster}.log"),
+        str(MAPPING_FP / "demic" / "logs" / "samtools_{sample}_{group}.log"),
     benchmark:
-        BENCHMARK_FP / "samtools_sort_{sample}_{group}_{cluster}.tsv"
+        BENCHMARK_FP / "samtools_sort_{sample}_{group}.tsv"
     threads: 4
     conda:
         "sbx_demic_bio_env.yml"
@@ -332,7 +332,9 @@ def demic_input_for_group(wildcards) -> list:
 
 rule run_demic:
     input:
-        demic_input_for_group,
+        #demic_input_for_group,
+        expand(MAPPING_FP / "demic" / "sorted" / "{{group}}" / "{sample}.sam", sample=Samples.keys()),
+        DEMIC_FP / "maxbin" / "{group}",
         DEMIC_FP / ".installed"
     output:
         str(MAPPING_FP / "demic" / "DEMIC_OUT" / "{group}" / "all_PTR.txt"),
