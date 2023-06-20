@@ -1,7 +1,7 @@
 name: sbx_demic_bio_env
 channels:
-  - bioconda
-  - conda-forge
+  - bioconda/label/cf201901
 dependencies:
-  - maxbin2
+  - bowtie2
+  - metabat2
   - samtools

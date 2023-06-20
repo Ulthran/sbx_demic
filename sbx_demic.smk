@@ -176,7 +176,7 @@ rule maxbin:
         b=rules.all_coassemble_demic.input.b,
         decontam_list=DEMIC_FP / "decontam_list_{group}.txt",
     output:
-        directory(DEMIC_FP / "maxbin" / "{group}/")
+        directory(DEMIC_FP / "maxbin" / "{group}/"),
     benchmark:
         BENCHMARK_FP / "maxbin_{group}.tsv"
     log:
@@ -284,7 +284,9 @@ rule samtools_sort:
     input:
         str(MAPPING_FP / "demic" / "raw" / "{group}" / "{sample}.sam"),
     output:
-        temp_files=temp(str(MAPPING_FP / "demic" / "sorted" / "{group}" / "{sample}.bam")),
+        temp_files=temp(
+            str(MAPPING_FP / "demic" / "sorted" / "{group}" / "{sample}.bam")
+        ),
         sorted_files=str(MAPPING_FP / "demic" / "sorted" / "{group}" / "{sample}.sam"),
     log:
         str(MAPPING_FP / "demic" / "logs" / "samtools_{sample}_{group}.log"),
@@ -304,9 +306,32 @@ rule samtools_sort:
         """
 
 
+rule metabat2:
+    input:
+        contigs=COASSEMBLY_DEMIC_FP / "{group}_final_contigs.fa",
+        bams=expand(MAPPING_FP / "demic" / "sorted" / "{{group}}" / "{sample}.bam", sample=Samples.keys()),
+    output:
+        directory(DEMIC_FP / "metabat2" / "{group}")
+    benchmark:
+        BENCHMARK_FP / "metabat2_{group}.tsv"
+    log:
+        LOG_FP / "metabat2_{group}.log",
+    resources:
+        mem_mb=20000,
+        runtime=720,
+    conda:
+        "sbx_demic_bio_env.yml"
+    shell:
+        """
+        mkdir -p {output}
+        cd {output}
+        runMetaBat.sh {input.contigs} {input.bams}
+        """
+
+
 rule install_demic:
     output:
-        out=DEMIC_FP / ".installed"
+        out=DEMIC_FP / ".installed",
     conda:
         "sbx_demic_env.yml"
     script:
@@ -317,14 +342,26 @@ def samples_for_group(group: str) -> list:
     cg = coassembly_groups(Cfg["coassembly_demic"]["group_file"], Samples.keys())
     return [s for g, s in zip(cg[0], cg[1]) if g == group]
 
+
 def clusters_for_group(group: str) -> list:
     fns = os.listdir(DEMIC_FP / "maxbin")
-    return [s.split(".")[1] for s in fns if len(s.split(".")) > 2 and s.split(".")[0] == group and s.split(".")[2] == "fasta"]
+    return [
+        s.split(".")[1]
+        for s in fns
+        if len(s.split(".")) > 2
+        and s.split(".")[0] == group
+        and s.split(".")[2] == "fasta"
+    ]
+
 
 def demic_input_for_group(wildcards) -> list:
     checkpoint_output = checkpoints.maxbin.get(**wildcards).output[0]
     return [
-        MAPPING_FP / "demic" / "sorted" / f"{wildcards.group}" / f"{sample}_{cluster}.sam"
+        MAPPING_FP
+        / "demic"
+        / "sorted"
+        / f"{wildcards.group}"
+        / f"{sample}_{cluster}.sam"
         for sample in samples_for_group(wildcards.group)
         for cluster in clusters_for_group(wildcards.group)
     ]
@@ -333,9 +370,13 @@ def demic_input_for_group(wildcards) -> list:
 rule run_demic:
     input:
         #demic_input_for_group,
-        expand(MAPPING_FP / "demic" / "sorted" / "{{group}}" / "{sample}.sam", sample=Samples.keys()),
-        DEMIC_FP / "maxbin" / "{group}",
-        DEMIC_FP / ".installed"
+        expand(
+            MAPPING_FP / "demic" / "sorted" / "{{group}}" / "{sample}.sam",
+            sample=Samples.keys(),
+        ),
+        #DEMIC_FP / "maxbin" / "{group}",
+        DEMIC_FP / "metabat2" / "{group}",
+        DEMIC_FP / ".installed",
     output:
         str(MAPPING_FP / "demic" / "DEMIC_OUT" / "{group}" / "all_PTR.txt"),
     benchmark:
@@ -357,11 +398,12 @@ rule run_demic:
         runtime=720,
     shell:
         """
-        {params.demic} --output_all {params.keep_all} {params.extras} \
+        perl {params.demic} --output_all {params.keep_all} {params.extras} \
         --thread_num {threads} \
         -S {params.sam_dir} -F {params.fasta_dir} \
         -O $(dirname {output}) 2>&1 {log}
         """
+
 
 rule aggregate_demic:
     input:
@@ -374,8 +416,8 @@ rule aggregate_demic:
                     )[0]
                 )
             ),
-        )
+        ),
     output:
-        MAPPING_FP / "demic" / "DEMIC_OUT" / "all_PTR.txt"
+        MAPPING_FP / "demic" / "DEMIC_OUT" / "all_PTR.txt",
     shell:
         "cat {input} > {output}"
