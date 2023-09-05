@@ -206,7 +206,7 @@ rule maxbin:
             -out {params.out_dir} -reads_list {input.decontam_list} \
             -verbose 2>&1 | tee {log}
         else
-            echo "Could not find MaxBin or run_MaxBin.pl in $PATH"
+            echo "Could not find MaxBin or run_MaxBin.pl in $PATH" > {log}
         fi
         """
 
@@ -316,6 +316,8 @@ rule metabat2:
         BENCHMARK_FP / "metabat2_{group}.tsv"
     log:
         LOG_FP / "metabat2_{group}.log",
+    params:
+        script=str(get_demic_path() / "scripts" / "runMetabat2.sh")
     resources:
         mem_mb=20000,
         runtime=720,
@@ -325,7 +327,7 @@ rule metabat2:
         """
         mkdir -p {output}
         cd {output}
-        runMetaBat.sh {input.contigs} {input.bams}
+        {params.script} {input.contigs} {input.bams} 2>&1 | tee {log}
         """
 
 
@@ -374,8 +376,8 @@ rule run_demic:
             MAPPING_FP / "demic" / "sorted" / "{{group}}" / "{sample}.sam",
             sample=Samples.keys(),
         ),
-        #DEMIC_FP / "maxbin" / "{group}",
-        DEMIC_FP / "metabat2" / "{group}",
+        DEMIC_FP / "maxbin" / "{group}",
+        #DEMIC_FP / "metabat2" / "{group}",
         DEMIC_FP / ".installed",
     output:
         str(MAPPING_FP / "demic" / "DEMIC_OUT" / "{group}" / "all_PTR.txt"),
@@ -387,7 +389,7 @@ rule run_demic:
         r_installer=get_demic_path() / "envs" / "install.R",
         demic=get_demic_path() / "vendor_demic_v1.0.2" / "DEMIC.pl",
         sam_dir=str(MAPPING_FP / "demic" / "sorted" / "{group}"),
-        fasta_dir=str(DEMIC_FP / "maxbin"),
+        fasta_dir=str(DEMIC_FP / "metabat2" / "{group}" / "all_final_contigs.fa.metabat-bins"),
         keep_all=Cfg["sbx_demic"]["keepall"],
         extras=Cfg["sbx_demic"]["extras"],
     threads: 4
