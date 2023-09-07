@@ -1,0 +1,2 @@
+For direct downloading of simulated sequencing data of 50 samples and 45 species (1,336 files in total), please use the link https://upenn.box.com/s/qzxz6vzo7l02cmd1jv2g4t26e3rt1u1v
+The file name indicates the information of simulate data set as NC_ID_sample#_coverage_PTR_0.fq.gz. 
